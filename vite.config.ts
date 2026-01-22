@@ -1,18 +1,17 @@
-
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
   define: {
-    // This ensures process.env.API_KEY is available in the browser during build/dev
-    'process.env.API_KEY': JSON.stringify(process.env.API_KEY || '')
+    // Vite needs this to expose the API_KEY from Vercel to your code
+    'process.env.API_KEY': JSON.stringify(process.env.API_KEY)
   },
   server: {
     port: 3000,
   },
   build: {
     outDir: 'dist',
+    sourcemap: true
   }
 });
