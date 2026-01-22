@@ -3,7 +3,6 @@ export type Tone = 'professional' | 'polite' | 'casual' | 'urgent' | 'short' | '
 export type Priority = 'high' | 'medium' | 'low';
 export type Category = 'Work' | 'Sales' | 'Networking' | 'Personal';
 
-// Added 'automations' to DashboardView to fix type mismatch errors in App.tsx
 export type DashboardView = 'overview' | 'pipeline' | 'automations' | 'ai-lab' | 'templates' | 'insights' | 'settings';
 
 export interface FollowUp {
@@ -17,6 +16,7 @@ export interface FollowUp {
   dueDate: string;
   notes: string;
   createdAt: string;
+  mediaUrl?: string; // Support for attached screenshots or media
 }
 
 export interface Template {
@@ -38,10 +38,6 @@ export interface AuthState {
   isAuthenticated: boolean;
 }
 
-/**
- * Fix: Added AutomationRule interface which was missing and causing import errors in App.tsx
- * and databaseService.ts.
- */
 export interface AutomationRule {
   id: string;
   name: string;

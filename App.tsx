@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate, Link } from 'react-router-dom';
 import { User, AuthState, FollowUp, Priority, Category, DashboardView, AutomationRule, Tone, Template } from './types';
 import { Button } from './components/Button';
@@ -12,7 +12,6 @@ const DashboardContainer: React.FC<{ user: User | null; onLogout: () => void }> 
   const [rules, setRules] = useState<AutomationRule[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [search, setSearch] = useState('');
 
   // Modals
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -23,7 +22,14 @@ const DashboardContainer: React.FC<{ user: User | null; onLogout: () => void }> 
   // Form States
   const [editingItem, setEditingItem] = useState<FollowUp | null>(null);
   const [selectedForAI, setSelectedForAI] = useState<FollowUp | null>(null);
-  const [formData, setFormData] = useState({ title: '', recipient: '', platform: 'Email' as any, dueDate: '', priority: 'medium' as Priority });
+  const [formData, setFormData] = useState({ 
+    title: '', 
+    recipient: '', 
+    platform: 'Email' as 'Email' | 'LinkedIn' | 'WhatsApp' | 'Other', 
+    dueDate: '', 
+    priority: 'medium' as Priority,
+    mediaUrl: '' 
+  });
   const [ruleData, setRuleData] = useState({ name: '', triggerDays: 3, tone: 'polite' as Tone });
   const [templateData, setTemplateData] = useState({ name: '', content: '', tone: 'professional' as Tone });
 
@@ -52,6 +58,17 @@ const DashboardContainer: React.FC<{ user: User | null; onLogout: () => void }> 
     init();
   }, []);
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFormData(prev => ({ ...prev, mediaUrl: reader.result as string }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSaveFollowUp = async (e: React.FormEvent) => {
     e.preventDefault();
     const item: FollowUp = {
@@ -63,14 +80,24 @@ const DashboardContainer: React.FC<{ user: User | null; onLogout: () => void }> 
       createdAt: editingItem?.createdAt || new Date().toISOString()
     };
     await databaseService.saveFollowUp(item);
-    setFollowUps(prev => editingItem ? prev.map(p => p.id === item.id ? item : p) : [item, ...prev]);
+    const updated = await databaseService.getFollowUps();
+    setFollowUps(updated);
     setIsModalOpen(false);
   };
 
-  const handleDeleteFollowUp = async (id: string) => {
-    if (!confirm('Permanently delete this follow-up?')) return;
-    await databaseService.deleteFollowUp(id);
-    setFollowUps(prev => prev.filter(f => f.id !== id));
+  const handleDeleteFollowUp = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Stop event from bubbling to parent elements
+    
+    const isConfirmed = window.confirm('Are you sure you want to delete this follow-up?');
+    if (!isConfirmed) return;
+
+    try {
+      await databaseService.deleteFollowUp(id);
+      setFollowUps(prev => prev.filter(f => f.id !== id));
+    } catch (err) {
+      console.error("Delete operation failed", err);
+      alert("Failed to delete. Please check storage permissions.");
+    }
   };
 
   const handleSaveRule = async (e: React.FormEvent) => {
@@ -132,7 +159,7 @@ const DashboardContainer: React.FC<{ user: User | null; onLogout: () => void }> 
                 <h1 className="text-4xl font-black text-slate-900 tracking-tight">System Status: Online</h1>
                 <p className="text-slate-500 font-medium">Monitoring {followUps.length} outreach points for {user?.name}.</p>
               </div>
-              <Button onClick={() => { setEditingItem(null); setFormData({ title: '', recipient: '', platform: 'Email', dueDate: '', priority: 'medium' }); setIsModalOpen(true); }} className="rounded-2xl h-14 px-8 shadow-xl shadow-indigo-100">Add New Track</Button>
+              <Button onClick={() => { setEditingItem(null); setFormData({ title: '', recipient: '', platform: 'Email', dueDate: '', priority: 'medium', mediaUrl: '' }); setIsModalOpen(true); }} className="rounded-2xl h-14 px-8 shadow-xl shadow-indigo-100">Add New Track</Button>
             </header>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               <div className="bg-slate-900 p-10 rounded-[2.5rem] text-white shadow-2xl lg:col-span-2 relative overflow-hidden">
@@ -157,9 +184,21 @@ const DashboardContainer: React.FC<{ user: User | null; onLogout: () => void }> 
                    <div key={f.id} className="flex items-center justify-between p-5 bg-slate-50 rounded-2xl hover:bg-white border border-transparent hover:border-indigo-100 transition-all">
                       <div className="flex items-center gap-4">
                          <div className={`w-3 h-3 rounded-full ${f.priority === 'high' ? 'bg-red-500 shadow-[0_0_12px_rgba(239,68,68,0.5)]' : 'bg-slate-300'}`}></div>
-                         <div><p className="font-black text-slate-800 leading-tight">{f.title}</p><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{f.recipient}</p></div>
+                         {f.mediaUrl && <img src={f.mediaUrl} className="w-8 h-8 rounded-lg object-cover border border-slate-200" alt="media" />}
+                         <div>
+                            <p className="font-black text-slate-800 leading-tight">{f.title}</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{f.recipient} • {f.platform}</p>
+                         </div>
                       </div>
-                      <Button size="sm" variant="outline" onClick={() => { setSelectedForAI(f); setIsAIModalOpen(true); }} className="rounded-xl border-slate-200 text-indigo-600">Draft AI</Button>
+                      <div className="flex items-center gap-2">
+                        <Button size="sm" variant="outline" onClick={() => { setSelectedForAI(f); setIsAIModalOpen(true); }} className="rounded-xl border-slate-200 text-indigo-600">Draft AI</Button>
+                        <button 
+                          onClick={(e) => handleDeleteFollowUp(f.id, e)} 
+                          className="w-10 h-10 rounded-xl bg-red-50 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all cursor-pointer"
+                        >
+                          <i className="fa-solid fa-trash-can text-sm"></i>
+                        </button>
+                      </div>
                    </div>
                  ))}
                </div>
@@ -171,7 +210,7 @@ const DashboardContainer: React.FC<{ user: User | null; onLogout: () => void }> 
           <div className="space-y-8">
             <div className="flex justify-between items-center">
               <h2 className="text-3xl font-black tracking-tight">Outreach Pipeline</h2>
-              <Button onClick={() => { setEditingItem(null); setFormData({ title: '', recipient: '', platform: 'Email', dueDate: '', priority: 'medium' }); setIsModalOpen(true); }}>Add Track</Button>
+              <Button onClick={() => { setEditingItem(null); setFormData({ title: '', recipient: '', platform: 'Email', dueDate: '', priority: 'medium', mediaUrl: '' }); setIsModalOpen(true); }}>Add Track</Button>
             </div>
             <div className="grid grid-cols-1 gap-4">
               {followUps.length === 0 ? (
@@ -180,15 +219,22 @@ const DashboardContainer: React.FC<{ user: User | null; onLogout: () => void }> 
                 followUps.map(f => (
                   <div key={f.id} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm hover:border-indigo-100 transition-all group">
                     <div className="flex items-center gap-6">
-                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-xl shadow-inner ${f.status === 'completed' ? 'bg-green-50 text-green-500' : 'bg-slate-50 text-slate-300'}`}><i className={`fa-solid ${f.status === 'completed' ? 'fa-check' : 'fa-hourglass'}`}></i></div>
+                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-xl shadow-inner ${f.status === 'completed' ? 'bg-green-50 text-green-500' : 'bg-slate-50 text-slate-300'}`}>
+                        {f.mediaUrl ? <img src={f.mediaUrl} className="w-full h-full rounded-2xl object-cover" alt="track" /> : <i className={`fa-solid ${f.status === 'completed' ? 'fa-check' : 'fa-hourglass'}`}></i>}
+                      </div>
                       <div>
                         <h4 className="font-black text-xl text-slate-900 leading-none mb-1">{f.title}</h4>
                         <p className="text-sm font-bold text-indigo-600 uppercase tracking-widest">{f.recipient} • {f.platform}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <button onClick={() => { setEditingItem(f); setFormData({...f}); setIsModalOpen(true); }} className="w-10 h-10 rounded-xl bg-slate-50 text-slate-400 flex items-center justify-center hover:bg-slate-100 transition-all"><i className="fa-solid fa-pen"></i></button>
-                      <button onClick={() => handleDeleteFollowUp(f.id)} className="w-10 h-10 rounded-xl bg-red-50 text-red-400 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all"><i className="fa-solid fa-trash-can"></i></button>
+                      <button onClick={() => { setEditingItem(f); setFormData({ ...f, mediaUrl: f.mediaUrl || '' }); setIsModalOpen(true); }} className="w-10 h-10 rounded-xl bg-slate-50 text-slate-400 flex items-center justify-center hover:bg-slate-100 transition-all"><i className="fa-solid fa-pen"></i></button>
+                      <button 
+                        onClick={(e) => handleDeleteFollowUp(f.id, e)} 
+                        className="w-10 h-10 rounded-xl bg-red-50 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all cursor-pointer"
+                      >
+                        <i className="fa-solid fa-trash-can"></i>
+                      </button>
                     </div>
                   </div>
                 ))
@@ -258,16 +304,6 @@ const DashboardContainer: React.FC<{ user: User | null; onLogout: () => void }> 
                 </div>
               ))}
             </div>
-            <div className="bg-slate-900 p-12 rounded-[4rem] text-white flex flex-col md:flex-row items-center gap-12">
-               <div className="flex-1 space-y-4">
-                  <h3 className="text-4xl font-black tracking-tighter">Gemini Optimization <br/> is currently Active.</h3>
-                  <p className="text-slate-400 font-medium">Your tone is being automatically adjusted based on previous outreach response patterns. Keep tracking to improve accuracy.</p>
-               </div>
-               <div className="w-64 h-64 bg-indigo-600 rounded-full flex items-center justify-center border-[24px] border-slate-800 shadow-2xl relative">
-                  <span className="text-4xl font-black">92%</span>
-                  <div className="absolute -bottom-4 bg-white text-indigo-600 px-4 py-1 rounded-full font-black text-xs shadow-xl uppercase">Health Score</div>
-               </div>
-            </div>
           </div>
         );
       case 'settings':
@@ -320,7 +356,72 @@ const DashboardContainer: React.FC<{ user: User | null; onLogout: () => void }> 
         <div className="max-w-5xl mx-auto">{renderContent()}</div>
       </main>
 
-      {/* FLOW MODAL */}
+      {/* TRACKING MODAL */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-xl flex items-center justify-center p-6 animate-in fade-in duration-300">
+          <form onSubmit={handleSaveFollowUp} className="bg-white p-12 rounded-[4rem] max-w-xl w-full space-y-8 animate-in zoom-in-95 shadow-2xl border border-white max-h-[90vh] overflow-y-auto custom-scrollbar">
+            <h2 className="text-3xl font-black text-slate-900 tracking-tight">{editingItem ? 'Edit Track' : 'Initialize Tracking'}</h2>
+            <div className="space-y-4">
+               <div className="space-y-1">
+                 <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Subject / Topic</label>
+                 <input required placeholder="Project Proposal, Quick Chat, etc." className="w-full px-8 py-5 rounded-3xl bg-slate-50 font-bold border-none outline-none focus:ring-4 focus:ring-indigo-100" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
+               </div>
+               <div className="space-y-1">
+                 <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Target Contact</label>
+                 <input required placeholder="Recipient Name" className="w-full px-8 py-5 rounded-3xl bg-slate-50 font-bold border-none outline-none focus:ring-4 focus:ring-indigo-100" value={formData.recipient} onChange={e => setFormData({...formData, recipient: e.target.value})} />
+               </div>
+               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Platform</label>
+                    <select 
+                      className="w-full px-4 py-5 rounded-3xl bg-slate-100 font-bold border-2 border-slate-200 outline-none focus:border-indigo-500 transition-all appearance-none cursor-pointer" 
+                      value={formData.platform} 
+                      onChange={e => setFormData({...formData, platform: e.target.value as any})}
+                    >
+                      <option value="Email">📧 Email</option>
+                      <option value="LinkedIn">💼 LinkedIn</option>
+                      <option value="WhatsApp">💬 WhatsApp</option>
+                      <option value="Other">✨ Other</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Ping Date</label>
+                    <input required type="date" className="w-full px-4 py-5 rounded-3xl bg-slate-50 font-bold border-none outline-none focus:ring-4 focus:ring-indigo-100" value={formData.dueDate} onChange={e => setFormData({...formData, dueDate: e.target.value})} />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Urgency</label>
+                    <select className="w-full px-4 py-5 rounded-3xl bg-slate-50 font-bold border-none outline-none focus:ring-4 focus:ring-indigo-100" value={formData.priority} onChange={e => setFormData({...formData, priority: e.target.value as any})}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select>
+                  </div>
+               </div>
+               <div className="space-y-1">
+                 <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Media Attachment (Optional)</label>
+                 <div className="flex flex-col gap-4">
+                   <input type="file" accept="image/*" className="hidden" id="media-upload" onChange={handleFileChange} />
+                   <label htmlFor="media-upload" className="w-full px-8 py-10 rounded-[2rem] bg-slate-50 border-2 border-dashed border-slate-200 flex flex-col items-center justify-center cursor-pointer hover:border-indigo-300 hover:bg-indigo-50/30 transition-all">
+                      {formData.mediaUrl ? (
+                        <div className="relative group">
+                          <img src={formData.mediaUrl} className="w-24 h-24 rounded-2xl object-cover shadow-lg" alt="preview" />
+                          <div className="absolute inset-0 bg-black/40 rounded-2xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <i className="fa-solid fa-cloud-arrow-up text-white"></i>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <i className="fa-solid fa-image text-3xl text-slate-300 mb-2"></i>
+                          <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Attach Screenshot</span>
+                        </>
+                      )}
+                   </label>
+                   {formData.mediaUrl && <Button variant="ghost" size="sm" type="button" onClick={() => setFormData({...formData, mediaUrl: ''})} className="text-red-500">Remove Media</Button>}
+                 </div>
+               </div>
+            </div>
+            <Button className="w-full py-6 rounded-3xl text-xl font-black shadow-2xl shadow-indigo-100">Secure Entry</Button>
+            <Button variant="ghost" type="button" className="w-full" onClick={() => setIsModalOpen(false)}>Abort</Button>
+          </form>
+        </div>
+      )}
+
       {isRuleModalOpen && (
         <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-xl flex items-center justify-center p-6 animate-in fade-in duration-300">
            <form onSubmit={handleSaveRule} className="bg-white p-12 rounded-[4rem] max-w-xl w-full space-y-8 animate-in zoom-in-95 shadow-2xl">
@@ -349,26 +450,6 @@ const DashboardContainer: React.FC<{ user: User | null; onLogout: () => void }> 
         </div>
       )}
 
-      {/* TRACKING MODAL */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-xl flex items-center justify-center p-6 animate-in fade-in duration-300">
-          <form onSubmit={handleSaveFollowUp} className="bg-white p-12 rounded-[4rem] max-w-xl w-full space-y-8 animate-in zoom-in-95 shadow-2xl border border-white">
-            <h2 className="text-3xl font-black text-slate-900 tracking-tight">{editingItem ? 'Edit Track' : 'Initialize Tracking'}</h2>
-            <div className="space-y-4">
-               <input required placeholder="Outreach Subject" className="w-full px-8 py-5 rounded-3xl bg-slate-50 font-bold border-none outline-none focus:ring-4 focus:ring-indigo-100" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
-               <input required placeholder="Recipient Name" className="w-full px-8 py-5 rounded-3xl bg-slate-50 font-bold border-none outline-none focus:ring-4 focus:ring-indigo-100" value={formData.recipient} onChange={e => setFormData({...formData, recipient: e.target.value})} />
-               <div className="grid grid-cols-2 gap-4">
-                  <input required type="date" className="w-full px-8 py-5 rounded-3xl bg-slate-50 font-bold border-none outline-none focus:ring-4 focus:ring-indigo-100" value={formData.dueDate} onChange={e => setFormData({...formData, dueDate: e.target.value})} />
-                  <select className="w-full px-8 py-5 rounded-3xl bg-slate-50 font-bold border-none outline-none focus:ring-4 focus:ring-indigo-100" value={formData.priority} onChange={e => setFormData({...formData, priority: e.target.value as any})}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select>
-               </div>
-            </div>
-            <Button className="w-full py-6 rounded-3xl text-xl font-black shadow-2xl shadow-indigo-100">Secure Entry</Button>
-            <Button variant="ghost" className="w-full" onClick={() => setIsModalOpen(false)}>Abort</Button>
-          </form>
-        </div>
-      )}
-
-      {/* TEMPLATE MODAL */}
       {isTemplateModalOpen && (
         <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-xl flex items-center justify-center p-6 animate-in fade-in duration-300">
            <form onSubmit={handleSaveTemplate} className="bg-white p-12 rounded-[4rem] max-w-2xl w-full space-y-8 animate-in zoom-in-95 shadow-2xl">
@@ -378,7 +459,7 @@ const DashboardContainer: React.FC<{ user: User | null; onLogout: () => void }> 
                  <textarea required placeholder="Message content (use [Name] for dynamic placeholder)..." rows={6} className="w-full px-8 py-6 rounded-3xl bg-slate-50 font-bold border-none outline-none focus:ring-4 focus:ring-indigo-100 resize-none" value={templateData.content} onChange={e => setTemplateData({...templateData, content: e.target.value})} />
               </div>
               <Button className="w-full py-6 rounded-3xl text-xl font-black shadow-2xl shadow-indigo-100">Commit Template</Button>
-              <Button variant="ghost" className="w-full" onClick={() => setIsTemplateModalOpen(false)}>Discard</Button>
+              <Button variant="ghost" type="button" className="w-full" onClick={() => setIsTemplateModalOpen(false)}>Discard</Button>
            </form>
         </div>
       )}
