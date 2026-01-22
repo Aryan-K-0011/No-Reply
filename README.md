@@ -1,20 +1,41 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
 
-# Run and deploy your AI Studio app
+# NoReply - Pro Follow-up Engine 🚀
 
-This contains everything you need to run your app locally.
+NoReply is a productivity-focused web application that helps users avoid missed opportunities by managing follow-ups. Users can track sent emails/messages, receive reminders, and generate AI-powered follow-up drafts.
 
-View your app in AI Studio: https://ai.studio/apps/drive/1taQ2pwe94BwqUeEdO1fPoL9BEKU-bO_D
+## Core Features
+- **Pipeline Tracking**: Manage outreach across Email, LinkedIn, and more.
+- **AI Outreach Engine**: Powered by Gemini 3.0 to draft strategic follow-ups.
+- **Automations**: Create rules for "Silence Thresholds".
+- **Insights**: Track your conversion success rates.
+- **Privacy First**: All data is stored locally via `localStorage` with export/import options.
 
-## Run Locally
+## Tech Stack
+- **Frontend**: React 19 (TSX)
+- **Styling**: Tailwind CSS
+- **Routing**: React Router 7
+- **AI**: Google GenAI (Gemini 3.0 Flash)
+- **Deployment**: Vercel
 
-**Prerequisites:**  Node.js
+## Local Development
 
+1. Clone the repository.
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Create a `.env` file and add your key:
+   ```bash
+   API_KEY=your_gemini_api_key_here
+   ```
+4. Start the dev server:
+   ```bash
+   npm run dev
+   ```
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Deployment to Vercel
+
+1. Push this code to a GitHub repository.
+2. Link the repository to Vercel.
+3. Add the `API_KEY` to the **Environment Variables** section in the Vercel Project Settings.
+4. Deploy!
